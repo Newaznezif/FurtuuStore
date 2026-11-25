@@ -57,7 +57,7 @@ function fromBase64(value: string): Uint8Array {
   return bytes;
 }
 
-function randomBytes(length: number): Uint8Array {
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {\n  return Uint8Array.from(bytes).buffer as ArrayBuffer;\n}\n\nfunction randomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
 }
 
@@ -71,7 +71,7 @@ async function deriveWrappingKey(masterPassword: string, salt: Uint8Array): Prom
     hashLength: KDF.hashLength,
     outputType: "binary",
   });
-  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  return crypto.subtle.importKey("raw", toArrayBuffer(raw), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 export async function createVault(userId: string, masterPassword: string): Promise<{
@@ -83,8 +83,8 @@ export async function createVault(userId: string, masterPassword: string): Promi
   const wrappingKey = await deriveWrappingKey(masterPassword, salt);
   const dataKeyBytes = randomBytes(32);
   const nonce = randomBytes(12);
-  const wrapped = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, wrappingKey, dataKeyBytes);
-  const key = await crypto.subtle.importKey("raw", dataKeyBytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  const wrapped = await crypto.subtle.encrypt({ name: "AES-GCM", iv: toArrayBuffer(nonce) }, wrappingKey, toArrayBuffer(dataKeyBytes));
+  const key = await crypto.subtle.importKey("raw", toArrayBuffer(dataKeyBytes), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
   dataKeyBytes.fill(0);
 
   return {
@@ -106,9 +106,9 @@ export async function unlockVault(record: VaultRecord, masterPassword: string): 
   }
   const wrappingKey = await deriveWrappingKey(masterPassword, fromBase64(record.kdf_salt));
   const raw = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: fromBase64(record.wrap_nonce) },
+    { name: "AES-GCM", iv: toArrayBuffer(fromBase64(record.wrap_nonce)) },
     wrappingKey,
-    fromBase64(record.wrapped_dek),
+    toArrayBuffer(fromBase64(record.wrapped_dek)),
   );
   return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
@@ -117,7 +117,7 @@ export async function encryptItem(item: VaultItem, userId: string, key: CryptoKe
   const nonce = randomBytes(12);
   const aad = new TextEncoder().encode(`furtuustore:v1:${userId}:${item.id}`);
   const plaintext = new TextEncoder().encode(JSON.stringify(item));
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce, additionalData: aad }, key, plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: toArrayBuffer(nonce), additionalData: toArrayBuffer(aad) }, key, toArrayBuffer(plaintext));
   plaintext.fill(0);
   return {
     id: item.id,
@@ -132,9 +132,9 @@ export async function decryptItem(record: EncryptedRecord, key: CryptoKey): Prom
   if (record.crypto_version !== 1) throw new Error("Unsupported item encryption version.");
   const aad = new TextEncoder().encode(`furtuustore:v1:${record.user_id}:${record.id}`);
   const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: fromBase64(record.nonce), additionalData: aad },
+    { name: "AES-GCM", iv: toArrayBuffer(fromBase64(record.nonce)), additionalData: toArrayBuffer(aad) },
     key,
-    fromBase64(record.encrypted_payload),
+    toArrayBuffer(fromBase64(record.encrypted_payload)),
   );
   return JSON.parse(new TextDecoder().decode(plaintext)) as VaultItem;
 }

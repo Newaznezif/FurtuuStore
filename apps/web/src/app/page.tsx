@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   ArrowUpRight, Check, Copy, Eye, EyeOff, Fingerprint, KeyRound, LockKeyhole,
@@ -114,7 +114,7 @@ export default function Home() {
     setItems(decrypted);
   };
 
-  const handleEmailSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleEmailSignIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true); setError(""); setMessage("");
     try {
@@ -203,6 +203,8 @@ export default function Home() {
     } catch { setError("Clipboard access was blocked by your browser."); }
   };
 
+  const GateIcon = view === "setup" ? Fingerprint : UnlockKeyhole;
+
   const visibleItems = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return items;
@@ -235,7 +237,7 @@ export default function Home() {
         <div className="notice"><LockKeyhole size={15} /> Email authentication does not encrypt your vault. Your master password does.</div>
       </section> :
       view === "setup" || view === "locked" ? <section className="auth-panel">
-        <div className="panel-icon"><{view === "setup" ? "Fingerprint" : "UnlockKeyhole"} size={25} /></div>
+        <div className="panel-icon"><GateIcon size={25} /></div>
         <div className="eyebrow">{view === "setup" ? "FIRST-TIME SETUP" : "VAULT LOCKED"}</div>
         <h1>{view === "setup" ? <>Create your <em>private vault.</em></> : <>Welcome <em>back.</em></>}</h1>
         <p>{view === "setup" ? "Create a strong master password. It derives the key that encrypts your vault. FurtuuStore never receives it." : "Enter your master password to decrypt your vault locally on this device."}</p>

@@ -166,7 +166,7 @@ export default function Home() {
     setBusy(true); setError(""); setMessage("");
     try {
       const { error: resendError } = await getSupabase().auth.resend({ type: "signup", email: email.trim(), options: {
-        emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\\/+$/, "") || window.location.origin,
+        emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") || window.location.origin,
       }});
       if (resendError) throw resendError;
       setResendCooldown(60);

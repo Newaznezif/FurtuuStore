@@ -134,6 +134,7 @@ export default function Home() {
       });
       if (signInError) throw signInError;
       setMessage("Check your email for the secure sign-in link. Keep this tab open.");
+      setResendCooldown(60);
     } catch (e) {
       const detail = e instanceof Error ? e.message : "Could not send the sign-in link.";
       const cooldownMatch = detail.match(/after (\d+) seconds?/i);

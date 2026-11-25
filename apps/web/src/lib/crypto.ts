@@ -57,7 +57,11 @@ function fromBase64(value: string): Uint8Array {
   return bytes;
 }
 
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {\n  return Uint8Array.from(bytes).buffer as ArrayBuffer;\n}\n\nfunction randomBytes(length: number): Uint8Array {
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(bytes).buffer as ArrayBuffer;
+}
+
+function randomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
 }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
+import Link from "next/link";
 import {
   ArrowUpRight, Check, Copy, Eye, EyeOff, Fingerprint, KeyRound, LockKeyhole,
   LogOut, Plus, Search, ShieldCheck, Trash2, UnlockKeyhole, X,
@@ -58,9 +59,11 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const userId = session?.user?.id;
+
   useEffect(() => {
     if (!authReady) return;
-    if (!session?.user) {
+    if (!userId) {
       setView("signed-out");
       setVaultRecord(null);
       setVaultKey(null);
@@ -69,7 +72,7 @@ export default function Home() {
     }
     let cancelled = false;
     setView("loading");
-    getSupabase().from("vaults").select("*").eq("user_id", session.user.id).maybeSingle()
+    getSupabase().from("vaults").select("*").eq("user_id", userId).maybeSingle()
       .then(({ data, error: queryError }) => {
         if (cancelled) return;
         if (queryError) {
@@ -86,7 +89,7 @@ export default function Home() {
         }
       });
     return () => { cancelled = true; };
-  }, [authReady, session?.user.id]);
+  }, [authReady, userId]);
 
   const lockVault = useCallback(() => {
     setVaultKey(null);
@@ -216,7 +219,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="FurtuuStore home"><span className="brand-mark"><Fingerprint size={20} /></span>furtuu<span>store</span></a>
+        <Link className="brand" href="/" aria-label="FurtuuStore home"><span className="brand-mark"><Fingerprint size={20} /></span>furtuu<span>store</span></Link>
         <div className="top-actions">
           {view === "open" && <span className="secure-label"><span className="status-dot" /> UNLOCKED ON THIS DEVICE</span>}
           {session && <button className="icon-button" onClick={view === "open" ? lockVault : handleSignOut} title={view === "open" ? "Lock vault" : "Sign out"}>{view === "open" ? <LockKeyhole size={17} /> : <LogOut size={17} />}</button>}

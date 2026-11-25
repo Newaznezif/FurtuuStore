@@ -43,6 +43,8 @@ The database receives ciphertext, nonce, KDF salt/parameters, wrapped DEK, recor
 
 ## Local development
 
+Use Node.js 24.x and pnpm 10.28.2. Then:
+
 1. Copy `.env.example` to `.env.local`.
 2. Add the Supabase project URL and publishable key.
 3. Install and run:

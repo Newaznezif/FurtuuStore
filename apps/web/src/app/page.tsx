@@ -36,6 +36,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [verificationPending, setVerificationPending] = useState(false);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<VaultItem | null>(null);
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
@@ -57,6 +58,7 @@ export default function Home() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      if (nextSession) setVerificationPending(false);
       setError("");
       setMessage("");
     });
@@ -142,15 +144,35 @@ export default function Home() {
         });
         if (signUpError) throw signUpError;
         setAccountPassword(""); setConfirmPassword("");
-        if (data.session) setMessage("Account created. Now create your separate master password to protect your vault.");
-        else setMessage("Account created. Check your inbox once to verify your email, then sign in here with your email and password.");
+        if (data.session) {
+          setVerificationPending(false);
+          setMessage("Account created. Now create your separate master password to protect your vault.");
+        } else {
+          setVerificationPending(true);
+          setMessage("Registration was accepted, but email delivery is not confirmed. Check your inbox and spam folder. If no verification email arrives, use Resend verification below. Supabase may temporarily block repeated email requests.");
+        }
       } else {
         const { error: signInError } = await client.auth.signInWithPassword({ email: email.trim(), password: accountPassword });
         if (signInError) throw signInError;
         setAccountPassword("");
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Authentication failed. Please try again.");
+      setError(getAuthErrorMessage(e, "Authentication failed. Please try again."));
+    } finally { setBusy(false); }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email.trim() || resendCooldown > 0 || busy) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const { error: resendError } = await getSupabase().auth.resend({ type: "signup", email: email.trim(), options: {
+        emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\\/+$/, "") || window.location.origin,
+      }});
+      if (resendError) throw resendError;
+      setResendCooldown(60);
+      setMessage("Supabase accepted the verification request, but cannot confirm inbox delivery. Check your inbox and spam folder.");
+    } catch (e) {
+      setError(getAuthErrorMessage(e, "Could not resend the verification email."));
     } finally { setBusy(false); }
   };
 
@@ -278,6 +300,7 @@ export default function Home() {
         <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginTop:17,fontSize:12}}>
           <button type="button" className="edit-button" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setError(""); setMessage(""); setConfirmPassword(""); }}>{authMode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}</button>
           {authMode === "signin" && <button type="button" className="edit-button" disabled={busy} onClick={handlePasswordReset}>Forgot password?</button>}
+          {verificationPending && <button type="button" className="edit-button" disabled={busy || resendCooldown > 0} onClick={handleResendVerification}>{resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend verification email"}</button>}
         </div>
         <div className="notice"><LockKeyhole size={15} /> Your account password signs you in. Your separate master password encrypts and unlocks the vault.</div>
       </section> :
@@ -323,6 +346,22 @@ export default function Home() {
       <footer className="app-footer"><span>FURTUUSTORE · YOUR KEYS. YOUR PRIVACY.</span><span>Encrypted locally · Synced privately</span></footer>
     </main>
   );
+}
+
+function getAuthErrorMessage(error: unknown, fallback: string) {
+  const authError = error as { message?: string; code?: string; status?: number };
+  const message = authError?.message ?? "";
+  const code = authError?.code ?? "";
+  if (authError?.status === 429 || code === "over_email_send_rate_limit" || /email rate limit exceeded|too many requests/i.test(message)) {
+    return "Supabase is temporarily rate-limiting email delivery. No new email was confirmed as sent. Wait before retrying; repeated requests will keep failing.";
+  }
+  if (code === "email_not_confirmed" || /email not confirmed/i.test(message)) {
+    return "This account's email is not verified yet. Resend the verification email and complete that step before signing in.";
+  }
+  if (/invalid login credentials/i.test(message)) {
+    return "Email or account password is incorrect. If you just registered, verify your email first. If this account was created before password sign-in was added, use Forgot password to set an account password.";
+  }
+  return message || fallback;
 }
 
 function generatePassword() {

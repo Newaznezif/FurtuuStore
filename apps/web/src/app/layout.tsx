@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "FurtuuStore — Your keys. Your privacy.",
-  description: "A security-first password manager in development.",
+  description: "A private, client-side encrypted password vault. Your keys. Your privacy. Your control.",
   robots: { index: false, follow: false },
 };
 

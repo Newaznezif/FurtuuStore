@@ -60,6 +60,7 @@ The GitHub repository is connected to Vercel. Pushes to `main` trigger productio
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_SITE_URL` (set to `https://furtuustore.vercel.app` in Vercel Production; use `http://localhost:3000` locally)
 
 In Supabase Dashboard → Authentication → URL Configuration, set the Site URL to the production deployment URL and add the production and preview URLs you intend to use to the Redirect URLs allowlist.
 

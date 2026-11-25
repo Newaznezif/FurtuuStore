@@ -32,6 +32,7 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<VaultItem | null>(null);
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
@@ -58,6 +59,12 @@ export default function Home() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   const userId = session?.user?.id;
 
@@ -123,12 +130,21 @@ export default function Home() {
     try {
       const { error: signInError } = await getSupabase().auth.signInWithOtp({
         email: email.trim(),
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") || window.location.origin },
       });
       if (signInError) throw signInError;
       setMessage("Check your email for the secure sign-in link. Keep this tab open.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not send the sign-in link.");
+      const detail = e instanceof Error ? e.message : "Could not send the sign-in link.";
+      const cooldownMatch = detail.match(/after (\d+) seconds?/i);
+      if (cooldownMatch) {
+        setResendCooldown(Number(cooldownMatch[1]));
+        setError(`Please wait ${cooldownMatch[1]} seconds before requesting another sign-in link.`);
+      } else if (/rate limit|too many requests|429/i.test(detail)) {
+        setError("Supabase is temporarily limiting email delivery. Avoid repeated attempts; the project needs a verified custom SMTP provider.");
+      } else {
+        setError(detail);
+      }
     } finally { setBusy(false); }
   };
 
@@ -235,7 +251,7 @@ export default function Home() {
         <p>Sign in with an email link. Your master password is separate and is used only on this device to unlock your encrypted vault.</p>
         <form onSubmit={handleEmailSignIn} className="stack-form">
           <label htmlFor="email">Email address</label><input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-          <button className="primary-button full" disabled={busy}>{busy ? "Sending link…" : "Send secure sign-in link"} <ArrowUpRight size={16} /></button>
+          <button className="primary-button full" disabled={busy || resendCooldown > 0}>{busy ? "Sending link…" : resendCooldown > 0 ? `Try again in ${resendCooldown}s` : "Send secure sign-in link"} <ArrowUpRight size={16} /></button>
         </form>
         <div className="notice"><LockKeyhole size={15} /> Email authentication does not encrypt your vault. Your master password does.</div>
       </section> :

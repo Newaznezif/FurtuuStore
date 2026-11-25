@@ -285,6 +285,14 @@ export default function Home() {
 
 function generatePassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*_-+=";
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+  const limit = 256 - (256 % alphabet.length);
+  const output: string[] = [];
+  while (output.length < 24) {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    for (const byte of bytes) {
+      if (byte < limit) output.push(alphabet[byte % alphabet.length]);
+      if (output.length === 24) break;
+    }
+  }
+  return output.join("");
 }

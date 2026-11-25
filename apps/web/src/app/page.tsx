@@ -27,6 +27,9 @@ export default function Home() {
   const [vaultKey, setVaultKey] = useState<CryptoKey | null>(null);
   const [items, setItems] = useState<VaultItem[]>([]);
   const [email, setEmail] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [masterPassword, setMasterPassword] = useState("");
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [message, setMessage] = useState("");
@@ -124,28 +127,44 @@ export default function Home() {
     setItems(decrypted);
   };
 
-  const handleEmailSignIn = async (event: FormEvent<HTMLFormElement>) => {
+  const handleAccountAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBusy(true); setError(""); setMessage("");
     try {
-      const { error: signInError } = await getSupabase().auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") || window.location.origin },
-      });
-      if (signInError) throw signInError;
-      setMessage("Check your email for the secure sign-in link. Keep this tab open.");
-      setResendCooldown(60);
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : "Could not send the sign-in link.";
-      const cooldownMatch = detail.match(/after (\d+) seconds?/i);
-      if (cooldownMatch) {
-        setResendCooldown(Number(cooldownMatch[1]));
-        setError(`Please wait ${cooldownMatch[1]} seconds before requesting another sign-in link.`);
-      } else if (/rate limit|too many requests|429/i.test(detail)) {
-        setError("Supabase is temporarily limiting email delivery. Avoid repeated attempts; the project needs a verified custom SMTP provider.");
+      const client = getSupabase();
+      if (authMode === "signup") {
+        if (accountPassword.length < 8) throw new Error("Use at least 8 characters for your account password.");
+        if (accountPassword !== confirmPassword) throw new Error("The account passwords do not match.");
+        const { data, error: signUpError } = await client.auth.signUp({
+          email: email.trim(),
+          password: accountPassword,
+          options: { emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") || window.location.origin },
+        });
+        if (signUpError) throw signUpError;
+        setAccountPassword(""); setConfirmPassword("");
+        if (data.session) setMessage("Account created. Now create your separate master password to protect your vault.");
+        else setMessage("Account created. Check your inbox once to verify your email, then sign in here with your email and password.");
       } else {
-        setError(detail);
+        const { error: signInError } = await client.auth.signInWithPassword({ email: email.trim(), password: accountPassword });
+        if (signInError) throw signInError;
+        setAccountPassword("");
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Authentication failed. Please try again.");
+    } finally { setBusy(false); }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email.trim()) { setError("Enter your email address first."); return; }
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const { error: resetError } = await getSupabase().auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") || window.location.origin,
+      });
+      if (resetError) throw resetError;
+      setMessage("If an account exists for that email, a password-reset message has been sent.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not request a password reset.");
     } finally { setBusy(false); }
   };
 
@@ -248,13 +267,19 @@ export default function Home() {
       view === "signed-out" ? <section className="auth-panel">
         <div className="eyebrow"><span className="pulse" /> PRIVATE BY DESIGN</div>
         <div className="panel-icon"><KeyRound size={25} /></div>
-        <h1>Your passwords.<br /><em>Your control.</em></h1>
-        <p>Sign in with an email link. Your master password is separate and is used only on this device to unlock your encrypted vault.</p>
-        <form onSubmit={handleEmailSignIn} className="stack-form">
+        <h1>{authMode === "signin" ? <>Your passwords.<br /><em>Your control.</em></> : <>Create your <em>account.</em></>}</h1>
+        <p>{authMode === "signin" ? "Sign in with your email and account password. Your separate master password unlocks the encrypted vault." : "Create an account with your email and a password. You will use this password for future sign-ins."}</p>
+        <form onSubmit={handleAccountAuth} className="stack-form">
           <label htmlFor="email">Email address</label><input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-          <button className="primary-button full" disabled={busy || resendCooldown > 0}>{busy ? "Sending link…" : resendCooldown > 0 ? `Try again in ${resendCooldown}s` : "Send secure sign-in link"} <ArrowUpRight size={16} /></button>
+          <label htmlFor="account-password">Account password</label><input id="account-password" type="password" autoComplete={authMode === "signin" ? "current-password" : "new-password"} minLength={8} required value={accountPassword} onChange={(e) => setAccountPassword(e.target.value)} placeholder="At least 8 characters" />
+          {authMode === "signup" && <><label htmlFor="confirm-password">Confirm account password</label><input id="confirm-password" type="password" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Enter the same password again" /></>}
+          <button className="primary-button full" disabled={busy}>{busy ? "Please wait…" : authMode === "signin" ? "Sign in" : "Create account"} <ArrowUpRight size={16} /></button>
         </form>
-        <div className="notice"><LockKeyhole size={15} /> Email authentication does not encrypt your vault. Your master password does.</div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginTop:17,fontSize:12}}>
+          <button type="button" className="edit-button" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setError(""); setMessage(""); setConfirmPassword(""); }}>{authMode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}</button>
+          {authMode === "signin" && <button type="button" className="edit-button" disabled={busy} onClick={handlePasswordReset}>Forgot password?</button>}
+        </div>
+        <div className="notice"><LockKeyhole size={15} /> Your account password signs you in. Your separate master password encrypts and unlocks the vault.</div>
       </section> :
       view === "setup" || view === "locked" ? <section className="auth-panel">
         <div className="panel-icon"><GateIcon size={25} /></div>
